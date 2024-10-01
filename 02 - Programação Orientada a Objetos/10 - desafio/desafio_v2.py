@@ -2,6 +2,9 @@ import textwrap
 from abc import ABC, abstractclassmethod, abstractproperty
 from datetime import datetime
 
+AGENCIA_PADRAO = "0001"
+LIMITE_PADRAO = 500
+LIMITE_SAQUES_PADRAO = 3
 
 class Cliente:
     def __init__(self, endereco):
@@ -27,7 +30,7 @@ class Conta:
     def __init__(self, numero, cliente):
         self._saldo = 0
         self._numero = numero
-        self._agencia = "0001"
+        self._agencia = AGENCIA_PADRAO
         self._cliente = cliente
         self._historico = Historico()
 
@@ -61,12 +64,10 @@ class Conta:
 
         if excedeu_saldo:
             print("\n@@@ Operação falhou! Você não tem saldo suficiente. @@@")
-
         elif valor > 0:
             self._saldo -= valor
             print("\n=== Saque realizado com sucesso! ===")
             return True
-
         else:
             print("\n@@@ Operação falhou! O valor informado é inválido. @@@")
 
@@ -84,7 +85,7 @@ class Conta:
 
 
 class ContaCorrente(Conta):
-    def __init__(self, numero, cliente, limite=500, limite_saques=3):
+    def __init__(self, numero, cliente, limite=LIMITE_PADRAO, limite_saques=LIMITE_SAQUES_PADRAO):
         super().__init__(numero, cliente)
         self._limite = limite
         self._limite_saques = limite_saques
@@ -99,10 +100,8 @@ class ContaCorrente(Conta):
 
         if excedeu_limite:
             print("\n@@@ Operação falhou! O valor do saque excede o limite. @@@")
-
         elif excedeu_saques:
             print("\n@@@ Operação falhou! Número máximo de saques excedido. @@@")
-
         else:
             return super().sacar(valor)
 
@@ -117,8 +116,9 @@ class ContaCorrente(Conta):
 
 
 class Historico:
-    def __init__(self):
+    def __init__(self, date_format="%d-%m-%Y %H:%M:%S"):
         self._transacoes = []
+        self._date_format = date_format
 
     @property
     def transacoes(self):
@@ -129,7 +129,7 @@ class Historico:
             {
                 "tipo": transacao.__class__.__name__,
                 "valor": transacao.valor,
-                "data": datetime.now().strftime("%d-%m-%Y %H:%M:%s"),
+                "data": datetime.now().strftime(self._date_format),
             }
         )
 
@@ -199,44 +199,46 @@ def recuperar_conta_cliente(cliente):
         print("\n@@@ Cliente não possui conta! @@@")
         return
 
-    # FIXME: não permite cliente escolher a conta
-    return cliente.contas[0]
+    if len(cliente.contas) == 1:
+        return cliente.contas[0]
 
+    print("\nEscolha uma das contas abaixo:")
+    for idx, conta in enumerate(cliente.contas, start=1):
+        print(f"[{idx}] Conta {conta.numero} - Agência {conta.agencia}")
+
+    escolha = int(input("Escolha a conta desejada: ")) - 1
+    return cliente.contas[escolha]
+
+
+def input_float(prompt):
+    while True:
+        try:
+            return float(input(prompt))
+        except ValueError:
+            print("\n@@@ Valor inválido! Por favor, informe um número. @@@")
+
+def executar_transacao(clientes, operacao):
+    cpf = input("Informe o CPF do cliente: ")
+    cliente = filtrar_cliente(cpf, clientes)
+
+    if not cliente:
+        print("\n@@@ Cliente não encontrado! @@@")
+        return
+
+    valor = input_float(f"Informe o valor do {operacao.__name__.lower()}: ")
+    transacao = operacao(valor)
+
+    conta = recuperar_conta_cliente(cliente)
+    if not conta:
+        return
+
+    cliente.realizar_transacao(conta, transacao)
 
 def depositar(clientes):
-    cpf = input("Informe o CPF do cliente: ")
-    cliente = filtrar_cliente(cpf, clientes)
-
-    if not cliente:
-        print("\n@@@ Cliente não encontrado! @@@")
-        return
-
-    valor = float(input("Informe o valor do depósito: "))
-    transacao = Deposito(valor)
-
-    conta = recuperar_conta_cliente(cliente)
-    if not conta:
-        return
-
-    cliente.realizar_transacao(conta, transacao)
-
+    executar_transacao(clientes, Deposito)
 
 def sacar(clientes):
-    cpf = input("Informe o CPF do cliente: ")
-    cliente = filtrar_cliente(cpf, clientes)
-
-    if not cliente:
-        print("\n@@@ Cliente não encontrado! @@@")
-        return
-
-    valor = float(input("Informe o valor do saque: "))
-    transacao = Saque(valor)
-
-    conta = recuperar_conta_cliente(cliente)
-    if not conta:
-        return
-
-    cliente.realizar_transacao(conta, transacao)
+    executar_transacao(clientes, Saque)
 
 
 def exibir_extrato(clientes):
@@ -315,26 +317,19 @@ def main():
 
         if opcao == "d":
             depositar(clientes)
-
         elif opcao == "s":
             sacar(clientes)
-
         elif opcao == "e":
             exibir_extrato(clientes)
-
         elif opcao == "nu":
             criar_cliente(clientes)
-
         elif opcao == "nc":
             numero_conta = len(contas) + 1
             criar_conta(numero_conta, clientes, contas)
-
         elif opcao == "lc":
             listar_contas(contas)
-
         elif opcao == "q":
             break
-
         else:
             print("\n@@@ Operação inválida, por favor selecione novamente a operação desejada. @@@")
 
